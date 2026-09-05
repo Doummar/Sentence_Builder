@@ -534,11 +534,6 @@ class SentenceBuilderGuideDialog(QDialog):
 
         # Bottom Action Buttons
         btn_row = QHBoxLayout()
-        btn_open_settings = QPushButton("Open Settings", self)
-        btn_open_settings.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        btn_open_settings.clicked.connect(self._open_settings_and_close)
-        btn_row.addWidget(btn_open_settings)
-
         btn_report = QPushButton("Report an Issue", self)
         btn_report.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         btn_report.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/Doummar/Sentence_Builder/issues")))
@@ -563,11 +558,6 @@ class SentenceBuilderGuideDialog(QDialog):
         """Closes the Guide dialog immediately on first click and returns to caller Settings panel if open."""
         self.accept()
         self._bring_settings_to_front(create_if_missing=False)
-
-    def _open_settings_and_close(self) -> None:
-        """Closes guide dialog and switches to or opens settings dialog without duplicating."""
-        self.accept()
-        self._bring_settings_to_front(target_tab=0, create_if_missing=True)
 
     def _bring_settings_to_front(self, target_tab: Optional[int] = None, create_if_missing: bool = False) -> None:
         """Ensures the caller or active settings dialog stays open, comes to the front, and is activated."""

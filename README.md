@@ -1,6 +1,8 @@
 # Sentence Builder - Anki Add-on
 
-A lightweight, robust add-on for Anki 23.10+ / 24.x / 25.x (PyQt6 / Qt6) that provides customizable styling, card alignment, and interactive word assembly for language learning cards.
+![Sentence Builder Demonstration](demo.gif)
+
+A lightweight, robust add-on for Anki Desktop that provides customizable styling, card alignment, and interactive word assembly for language learning cards.
 
 ## Features
 

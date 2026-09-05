@@ -1,0 +1,158 @@
+<div class="sb-card" id="back-card">
+  <div class="ctrl">
+    {{Back Audio}}
+    {{#Back Image}}
+    <button class="ibtn" onclick="toggle('bimg', this)" title="Image">image</button>
+    {{/Back Image}}
+  </div>
+
+  <div class="main">
+    {{#Visible Back Image}}
+    <div class="img-area">
+      {{Visible Back Image}}
+    </div>
+    {{/Visible Back Image}}
+
+    <!-- Unified Back Card Content Group -->
+    <div id="sb-content-group">
+      <!-- 1. The prompt (Front) -->
+      <div class="sb-prompt">{{Front}}</div>
+
+      <!-- 2. The exact tiles the user assembled (with green/red colours) — user's attempt -->
+      <div id="sb-back-block" class="sb-back-block">
+        <div id="sb-user-attempt" class="sb-user-attempt"></div>
+
+        <!-- Clean divider between attempt and full correct sentence -->
+        <hr class="sb-divider" />
+
+        <!-- 3. Directly under the user's attempt -> the full correct sentence in normal text -->
+        <div class="sb-solution">
+          {{Back}}
+        </div>
+
+        <!-- 4. Optional Explanation -->
+        {{#Explanation}}
+        <div class="sb-explanation">
+          <hr class="sb-divider" />
+          {{Explanation}}
+        </div>
+        {{/Explanation}}
+      </div>
+    </div>
+
+    <div id="extra-area" class="extra-area"></div>
+  </div>
+
+  {{#Back Image}}
+  <div id="bimg" class="ms" style="display: none !important; visibility: hidden !important;">{{Back Image}}</div>
+  {{/Back Image}}
+</div>
+
+<script>
+function toggle(id, btn) {
+  var source = document.getElementById(id);
+  var area = document.getElementById('extra-area');
+  if (!source || !area) return;
+
+  var isActive = area.dataset.active === id;
+
+  document.querySelectorAll('.ibtn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+
+  if (isActive) {
+    area.innerHTML = '';
+    area.dataset.active = '';
+    area.classList.remove('show');
+  } else {
+    area.innerHTML = source.innerHTML;
+    area.dataset.active = id;
+    area.classList.add('show');
+    btn.classList.add('active');
+  }
+}
+
+// Display user's attempt on back card & format solution
+(function() {
+  var container = document.getElementById("sb-user-attempt");
+  var solElem = document.querySelector(".sb-solution");
+  var tilesWrapper = document.createElement("div");
+  tilesWrapper.className = "sb-attempt-tiles";
+  var attempt = [];
+  var targetTokens = [];
+  var isBracketed = false;
+
+  try {
+    var raw = sessionStorage.getItem("sb_user_attempt");
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        attempt = parsed;
+      } else if (parsed && parsed.assembled) {
+        attempt = parsed.assembled;
+        targetTokens = parsed.targetTokens || [];
+        isBracketed = !!parsed.isBracketed;
+      }
+    }
+  } catch(e) {}
+
+  if (container) {
+    if (attempt.length > 0) {
+      attempt.forEach(function(item) {
+        var tile = document.createElement("div");
+        tile.className = "sb-tile " + (item.isCorrect ? "sb-tile-correct" : "sb-tile-wrong");
+        tile.textContent = item.text;
+        tilesWrapper.appendChild(tile);
+      });
+    } else {
+      tilesWrapper.innerHTML = '<span style="font-size: 0.88rem; opacity: 0.45; font-style: italic;">(No words assembled)</span>';
+    }
+    container.appendChild(tilesWrapper);
+  }
+
+  // Format solution sentence:
+  // Words that the user got correct -> stay normal weight
+  // Words that the user got wrong (wrong position or wrong word) -> make them bold
+  if (solElem) {
+    var rawText = (solElem.textContent || solElem.innerText || "").trim();
+    if (rawText && attempt.length > 0) {
+      var words = rawText.split(/\s+/).filter(function(w) { return w.length > 0; });
+      var formatted = [];
+      var targetIdx = 0;
+
+      words.forEach(function(word) {
+        var isChallengeWord = false;
+        var isWordCorrect = false;
+
+        if (isBracketed && targetTokens.length > 0) {
+          if (targetIdx < targetTokens.length) {
+            var cleanWord = word.replace(/^[^\w\s\u00C0-\u024F]+|[^\w\s\u00C0-\u024F]+$/g, "").toLowerCase();
+            var cleanTarget = targetTokens[targetIdx].replace(/^[^\w\s\u00C0-\u024F]+|[^\w\s\u00C0-\u024F]+$/g, "").toLowerCase();
+            if (word.toLowerCase() === targetTokens[targetIdx].toLowerCase() || cleanWord === cleanTarget) {
+              isChallengeWord = true;
+              if (attempt[targetIdx] && attempt[targetIdx].isCorrect) {
+                isWordCorrect = true;
+              }
+              targetIdx++;
+            }
+          }
+        } else {
+          isChallengeWord = true;
+          if (attempt[targetIdx] && attempt[targetIdx].isCorrect) {
+            isWordCorrect = true;
+          }
+          targetIdx++;
+        }
+
+        if (isChallengeWord && !isWordCorrect) {
+          formatted.push('<b class="sb-word-wrong">' + word + '</b>');
+        } else {
+          formatted.push('<span class="sb-word-normal">' + word + '</span>');
+        }
+      });
+
+      solElem.innerHTML = formatted.join(" ");
+    }
+  }
+})();
+</script>

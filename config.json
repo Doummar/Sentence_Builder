@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "card_position": "top",
+  "horizontal_alignment": "center",
+  "controls_position": "top_right",
+  "line_width": 520,
+  "font_family": "Arial",
+  "font_size": 18,
+  "image_size": "medium",
+  "correct_color": "#22c55e",
+  "wrong_color": "#ef4444",
+  "custom_colors_enabled": true,
+  "auto_reveal_back": true,
+  "show_check_button": false,
+  "version": "1.0.0"
+}

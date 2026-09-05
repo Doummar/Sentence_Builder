@@ -1,0 +1,309 @@
+<div class="sb-card" id="front-card">
+  <div class="ctrl">
+    {{Front Audio}}
+    {{#Front Image}}
+    <button class="ibtn" onclick="toggle('fimg', this)" title="Image">image</button>
+    {{/Front Image}}
+  </div>
+
+  <div class="main">
+    {{#Visible Front Image}}
+    <div class="img-area">
+      {{Visible Front Image}}
+    </div>
+    {{/Visible Front Image}}
+
+    <!-- Sentence Builder content -->
+    <div class="sb-prompt">{{Front}}</div>
+
+    <div id="sb-interactive-block">
+      <div id="sb-sandbox" class="sb-empty" ondragover="sbAllowDrop(event)" ondrop="sbDrop(event, 'sandbox')"></div>
+      <div id="sb-word-bank" ondragover="sbAllowDrop(event)" ondrop="sbDrop(event, 'bank')"></div>
+      
+      <div class="sb-actions">
+        <button type="button" class="sb-btn sb-btn-reset" onclick="sbResetTiles()" title="Reset Tiles">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          <span>Reset</span>
+        </button>
+        <button type="button" class="sb-btn sb-btn-check" onclick="sbCheckSentence()" title="Check Answer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Check</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hidden Raw Answer Data for script initialization -->
+    <div id="sb-target-data" style="display:none;" data-sentence="{{text:Back}}"></div>
+
+    <div id="extra-area" class="extra-area"></div>
+  </div>
+
+  {{#Front Image}}
+  <div id="fimg" class="ms" style="display: none !important; visibility: hidden !important;">{{Front Image}}</div>
+  {{/Front Image}}
+</div>
+
+<script>
+function toggle(id, btn) {
+  var source = document.getElementById(id);
+  var area = document.getElementById('extra-area');
+  if (!source || !area) return;
+
+  var isActive = area.dataset.active === id;
+
+  document.querySelectorAll('.ibtn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+
+  if (isActive) {
+    area.innerHTML = '';
+    area.dataset.active = '';
+    area.classList.remove('show');
+  } else {
+    area.innerHTML = source.innerHTML;
+    area.dataset.active = id;
+    area.classList.add('show');
+    btn.classList.add('active');
+  }
+}
+
+// Sentence Builder interactive engine
+(function() {
+  var targetElem = document.getElementById("sb-target-data");
+  if (!targetElem) return;
+
+  var rawSentence = (targetElem.getAttribute("data-sentence") || "").trim();
+  if (!rawSentence) return;
+
+  var tokens = rawSentence.split(/\s+/).filter(function(t) { return t.length > 0; });
+  if (tokens.length === 0) return;
+
+  var originalOrder = tokens.slice();
+  var shuffled = tokens.map(function(val, idx) { return { text: val, origIdx: idx }; });
+  
+  // Fisher-Yates shuffle
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+
+  var sandbox = document.getElementById("sb-sandbox");
+  var wordBank = document.getElementById("sb-word-bank");
+  var draggedTile = null;
+
+  function updateEmptyState() {
+    if (sandbox.children.length === 0) {
+      sandbox.classList.add("sb-empty");
+    } else {
+      sandbox.classList.remove("sb-empty");
+    }
+  }
+
+  function clearDropIndicators() {
+    sandbox.classList.remove("sb-drag-over");
+    var tiles = Array.prototype.slice.call(sandbox.querySelectorAll(".sb-tile"));
+    tiles.forEach(function(t) {
+      t.classList.remove("sb-drop-target-left", "sb-drop-target-right");
+    });
+  }
+
+  function getInsertionTarget(container, clientX, clientY) {
+    var tiles = Array.prototype.slice.call(container.querySelectorAll(".sb-tile:not(.dragging)"));
+    for (var i = 0; i < tiles.length; i++) {
+      var rect = tiles[i].getBoundingClientRect();
+      if (clientY < rect.top + 6) {
+        return { element: tiles[i], side: "left" };
+      }
+      if (clientY <= rect.bottom + 6 && clientX < rect.left + rect.width / 2) {
+        return { element: tiles[i], side: "left" };
+      }
+    }
+    if (tiles.length > 0) {
+      return { element: tiles[tiles.length - 1], side: "right" };
+    }
+    return null;
+  }
+
+  function createTile(item, id) {
+    var tile = document.createElement("div");
+    tile.className = "sb-tile";
+    tile.id = "sb-tile-" + id;
+    tile.textContent = item.text;
+    tile.setAttribute("draggable", "true");
+    tile.setAttribute("data-orig-idx", item.origIdx);
+    tile.setAttribute("data-text", item.text);
+
+    tile.addEventListener("click", function(e) {
+      e.stopPropagation();
+      clearDropIndicators();
+      if (tile.parentElement === wordBank) {
+        sandbox.appendChild(tile);
+      } else {
+        wordBank.appendChild(tile);
+      }
+      tile.classList.add("sb-tile-settle");
+      setTimeout(function() { tile.classList.remove("sb-tile-settle"); }, 200);
+      updateEmptyState();
+      clearFeedback();
+      saveUserAttempt();
+      checkAutoValidate();
+    });
+
+    tile.addEventListener("dragstart", function(e) {
+      draggedTile = tile;
+      tile.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", tile.id);
+      e.dataTransfer.effectAllowed = "move";
+    });
+
+    tile.addEventListener("dragend", function() {
+      tile.classList.remove("dragging");
+      draggedTile = null;
+      clearDropIndicators();
+    });
+
+    return tile;
+  }
+
+  function saveUserAttempt() {
+    try {
+      var assembled = Array.prototype.slice.call(sandbox.children);
+      var attempt = assembled.map(function(t, idx) {
+        var expected = originalOrder[idx];
+        var actual = t.getAttribute("data-text");
+        return {
+          text: actual,
+          isCorrect: (expected === actual)
+        };
+      });
+      sessionStorage.setItem("sb_user_attempt", JSON.stringify(attempt));
+    } catch(e) {}
+  }
+
+  wordBank.innerHTML = "";
+  sandbox.innerHTML = "";
+  shuffled.forEach(function(item, idx) {
+    var tile = createTile(item, idx);
+    wordBank.appendChild(tile);
+  });
+  updateEmptyState();
+  saveUserAttempt();
+
+  function clearFeedback() {
+    var tiles = document.querySelectorAll(".sb-tile");
+    tiles.forEach(function(t) {
+      t.classList.remove("sb-tile-correct", "sb-tile-wrong");
+    });
+  }
+
+  window.sbAllowDrop = function(e) {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "move";
+    }
+
+    if (sandbox.contains(e.target) || e.target === sandbox) {
+      sandbox.classList.add("sb-drag-over");
+      var targetInfo = getInsertionTarget(sandbox, e.clientX, e.clientY);
+      var tiles = Array.prototype.slice.call(sandbox.querySelectorAll(".sb-tile:not(.dragging)"));
+      tiles.forEach(function(t) {
+        t.classList.remove("sb-drop-target-left", "sb-drop-target-right");
+      });
+      if (targetInfo && targetInfo.element) {
+        if (targetInfo.side === "left") {
+          targetInfo.element.classList.add("sb-drop-target-left");
+        } else {
+          targetInfo.element.classList.add("sb-drop-target-right");
+        }
+      }
+    }
+  };
+
+  window.sbDrop = function(e, targetZone) {
+    e.preventDefault();
+    var tileId = e.dataTransfer.getData("text/plain");
+    var tile = document.getElementById(tileId) || draggedTile;
+    clearDropIndicators();
+    if (!tile) return;
+
+    if (targetZone === "sandbox") {
+      var targetInfo = getInsertionTarget(sandbox, e.clientX, e.clientY);
+      if (targetInfo && targetInfo.element) {
+        if (targetInfo.side === "left") {
+          if (targetInfo.element !== tile) {
+            sandbox.insertBefore(tile, targetInfo.element);
+          }
+        } else {
+          if (targetInfo.element.nextSibling !== tile) {
+            sandbox.insertBefore(tile, targetInfo.element.nextSibling);
+          }
+        }
+      } else {
+        sandbox.appendChild(tile);
+      }
+    } else {
+      wordBank.appendChild(tile);
+    }
+
+    tile.classList.add("sb-tile-settle");
+    setTimeout(function() { tile.classList.remove("sb-tile-settle"); }, 200);
+
+    updateEmptyState();
+    clearFeedback();
+    saveUserAttempt();
+    checkAutoValidate();
+  };
+
+  window.sbResetTiles = function() {
+    var allTiles = Array.prototype.slice.call(document.querySelectorAll(".sb-tile"));
+    allTiles.forEach(function(tile) {
+      tile.classList.remove("sb-tile-correct", "sb-tile-wrong");
+      wordBank.appendChild(tile);
+    });
+    updateEmptyState();
+    saveUserAttempt();
+  };
+
+  window.sbCheckSentence = function() {
+    var assembled = Array.prototype.slice.call(sandbox.children);
+    if (assembled.length === 0) return false;
+
+    var isAllCorrect = true;
+    if (assembled.length !== originalOrder.length) {
+      isAllCorrect = false;
+    }
+
+    assembled.forEach(function(tile, idx) {
+      var expected = originalOrder[idx];
+      var actual = tile.getAttribute("data-text");
+      if (expected === actual) {
+        tile.classList.add("sb-tile-correct");
+        tile.classList.remove("sb-tile-wrong");
+      } else {
+        tile.classList.add("sb-tile-wrong");
+        tile.classList.remove("sb-tile-correct");
+        isAllCorrect = false;
+      }
+    });
+
+    saveUserAttempt();
+
+    if (isAllCorrect && assembled.length === originalOrder.length) {
+      if (typeof pycmd !== "undefined") {
+        setTimeout(function() {
+          try { pycmd("ans"); } catch(e) {}
+        }, 400);
+      }
+    }
+    return isAllCorrect;
+  };
+
+  function checkAutoValidate() {
+    if (wordBank.children.length === 0 && sandbox.children.length === originalOrder.length) {
+      sbCheckSentence();
+    }
+  }
+})();
+</script>
